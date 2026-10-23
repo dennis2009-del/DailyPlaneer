@@ -14,7 +14,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
         import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc, query, where } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
 
-        // ⚠️ 본인의 Firebase 설정값으로 교체하세요
+        // Firebase 설정값 (본인 설정값)
         const firebaseConfig = {
             apiKey: "AIzaSyCEUmcAMmfQSwt5Pz06GgjcxqFe7dL3lWo",
             authDomain: "dailyplanner-df6d8.firebaseapp.com",
@@ -32,6 +32,7 @@
         Kakao.init('d369d7df212efbd176d4142c85f7f1b0');
 
         let currentKakaoUser = null;
+        let currentNickname = '';
         let schedules = [];
         let currentFilter = '전체';
 
@@ -44,9 +45,13 @@
                         url: '/v2/user/me',
                         success: async function(res) {
                             currentKakaoUser = res;
+                            // 로컬스토리지에 저장된 사용자 정의 닉네임이 있으면 사용, 없으면 카카오 닉네임 사용
+                            const savedNick = localStorage.getItem(`nick_${res.id}`);
+                            currentNickname = savedNick || res.properties.nickname || '플래너';
+
                             document.getElementById('auth-section').style.display = 'none';
                             document.getElementById('main-content').style.display = 'block';
-                            document.getElementById('user-profile').innerText = `${res.properties.nickname}님 환영합니다!`;
+                            updateUserProfileUI();
                             await loadSchedules();
                         },
                         fail: function(error) {
@@ -59,6 +64,24 @@
                 }
             });
         };
+
+        // 닉네임 변경 기능
+        window.editNickname = () => {
+            if (!currentKakaoUser) return;
+            const newNick = prompt('변경할 닉네임을 입력하세요:', currentNickname);
+            if (newNick && newNick.trim()) {
+                currentNickname = newNick.trim();
+                localStorage.setItem(`nick_${currentKakaoUser.id}`, currentNickname);
+                updateUserProfileUI();
+            }
+        };
+
+        function updateUserProfileUI() {
+            document.getElementById('user-profile').innerHTML = `
+                <span><strong>${currentNickname}</strong>님 환영합니다!</span>
+                <button onclick="editNickname()" class="btn-edit-nick" title="닉네임 변경"><i class="fa-solid fa-pen"></i> 수정</button>
+            `;
+        }
 
         // 로그아웃
         window.logout = () => {
@@ -174,21 +197,33 @@
             renderSchedules();
         };
 
-        // 일정 목록 출력
+        // 일정 목록 출력 (검색 + 정렬 기능 통합)
         function renderSchedules() {
             const list = document.getElementById('schedule-list');
             const searchQuery = document.getElementById('search').value.toLowerCase();
+            const sortOption = document.getElementById('sort-select') ? document.getElementById('sort-select').value : 'dday-asc';
             list.innerHTML = '';
 
             let filtered = currentFilter === '전체' 
-                ? schedules 
+                ? [...schedules] 
                 : schedules.filter(s => s.category === currentFilter);
 
             if (searchQuery) {
                 filtered = filtered.filter(s => s.title.toLowerCase().includes(searchQuery));
             }
 
-            filtered.sort((a, b) => new Date(a.date) - new Date(b.date));
+            // 정렬 로직 적용
+            filtered.sort((a, b) => {
+                if (sortOption === 'dday-asc') {
+                    return new Date(a.date) - new Date(b.date); // 마감일 임박순
+                } else if (sortOption === 'dday-desc') {
+                    return new Date(b.date) - new Date(a.date); // 마감일 먼 순
+                } else if (sortOption === 'title-asc') {
+                    return a.title.localeCompare(b.title); // 이름순 (가나다/ABC)
+                } else if (sortOption === 'category') {
+                    return a.category.localeCompare(b.category); // 카테고리순
+                }
+            });
 
             if (filtered.length === 0) {
                 list.innerHTML = `
@@ -251,7 +286,7 @@
             ];
 
             const randomCheer = cheerMessages[Math.floor(Math.random() * cheerMessages.length)];
-            let messageText = `📅 오늘의 D-Day 브리핑\n\n`;
+            let messageText = `📅 [${currentNickname}]님의 D-Day 브리핑\n\n`;
 
             const sortedSchedules = [...schedules].sort((a, b) => new Date(a.date) - new Date(b.date));
             sortedSchedules.forEach(s => {
@@ -314,12 +349,14 @@
         .btn-kakao-login { background-color: var(--kakao-color); color: #3c1e1e; width: 100%; padding: 12px; font-size: 1.05rem; }
         .btn-kakao-login:hover { background-color: var(--kakao-hover); }
         .btn-kakao-send { background-color: #3c1e1e; color: #ffffff; width: 100%; }
-        .controls-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; }
+        .controls-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
         .filter-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
-        .btn-filter { background: #e9ecef; color: #495057; padding: 6px 12px; font-size: 0.85rem; border-radius: 20px; }
+        .btn-filter { background: #e9ecef; color: #495057; padding: 6px 12px; font-size: 0.85rem; border-radius: 20px; border: none; cursor: pointer; }
         .btn-filter.active { background: var(--primary-color); color: white; }
-        .search-box { position: relative; flex: 1; max-width: 250px; min-width: 180px; }
-        .search-box input { padding-left: 32px; }
+        .controls-right { display: flex; items-center; gap: 10px; flex-wrap: wrap; flex: 1; justify-content: flex-end; }
+        .sort-select { width: auto; min-width: 140px; padding: 6px 10px; font-size: 0.85rem; }
+        .search-box { position: relative; min-width: 160px; }
+        .search-box input { padding-left: 32px; font-size: 0.85rem; }
         .search-box i { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
         .schedule-list { list-style: none; display: flex; flex-direction: column; gap: 12px; }
         .schedule-item { background: #ffffff; border: 1px solid #e9ecef; border-left: 5px solid var(--primary-color); border-radius: 8px; padding: 16px; display: flex; justify-content: space-between; align-items: center; }
@@ -331,6 +368,7 @@
         .badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; font-weight: 600; background: #e9ecef; color: #495057; }
         .schedule-title { font-weight: 600; font-size: 1.05rem; }
         .schedule-date { font-size: 0.85rem; color: var(--text-muted); }
+        .schedule-right { display: flex; align-items: center; gap: 15px; }
         .dday-tag { font-size: 1.2rem; font-weight: 700; color: var(--primary-color); }
         .dday-tag.imminent { color: #ff6b6b; }
         .item-actions { display: flex; gap: 6px; }
@@ -338,6 +376,7 @@
         .btn-icon.delete:hover { color: #ff6b6b; }
         .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); }
         .user-bar { display: flex; justify-content: space-between; align-items: center; background: #f1f3f5; padding: 12px 18px; border-radius: 8px; margin-bottom: 20px; }
+        .btn-edit-nick { background: none; border: none; color: #4a90e2; cursor: pointer; font-size: 0.8rem; margin-left: 6px; text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -360,7 +399,7 @@
     <!-- 로그인 후 메인 화면 -->
     <div id="main-content" style="display: none;">
         <div class="user-bar">
-            <span id="user-profile" style="font-weight: 600;"></span>
+            <div id="user-profile"></div>
             <button class="btn" onclick="logout()" style="background: #dc3545; color: white; padding: 6px 12px; font-size: 0.85rem;">로그아웃</button>
         </div>
 
@@ -402,7 +441,7 @@
             </button>
         </div>
 
-        <!-- 일정 목록 영역 -->
+        <!-- 일정 목록 컨트롤 영역 (필터 + 정렬 + 검색) -->
         <div class="controls-bar">
             <div class="filter-buttons">
                 <button class="btn btn-filter active" onclick="filterSchedules('전체')">전체</button>
@@ -410,9 +449,19 @@
                 <button class="btn btn-filter" onclick="filterSchedules('과제')">과제</button>
                 <button class="btn btn-filter" onclick="filterSchedules('개인')">개인</button>
             </div>
-            <div class="search-box">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" id="search" placeholder="일정 검색..." oninput="renderSchedules()">
+            <div class="controls-right">
+                <!-- 정렬 선택 드롭다운 -->
+                <select id="sort-select" class="sort-select" onchange="renderSchedules()">
+                    <option value="dday-asc">⏳ 마감일 임박순</option>
+                    <option value="dday-desc">📅 마감일 먼 순</option>
+                    <option value="title-asc">🔤 이름순</option>
+                    <option value="category">🏷️ 유형별</option>
+                </select>
+                <!-- 검색창 -->
+                <div class="search-box">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    <input type="text" id="search" placeholder="일정 검색..." oninput="renderSchedules()">
+                </div>
             </div>
         </div>
 
