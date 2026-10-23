@@ -28,15 +28,15 @@
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
 
-        // Kakao SDK 초기화 (본인 카카오 JavaScript 키 사용)
+        // Kakao SDK 초기화
         Kakao.init('d369d7df212efbd176d4142c85f7f1b0');
 
         let currentKakaoUser = null;
-        let currentNickname = '';
+        let currentNickname = '플래너';
         let schedules = [];
         let currentFilter = '전체';
 
-        // 카카오 로그인 (nickname 읽기 오류 방어 예외처리 적용)
+        // 카카오 로그인 (nickname 읽기 에러 완벽 방어 처리)
         window.loginWithKakao = () => {
             Kakao.Auth.login({
                 success: function(authObj) {
@@ -44,10 +44,17 @@
                         url: '/v2/user/me',
                         success: async function(res) {
                             currentKakaoUser = res;
-                            const savedNick = localStorage.getItem(`nick_${res.id}`);
-                            // 안전하게 닉네임 가져오기 (옵셔널 체이닝)
-                            const kakaoNick = res?.kakao_account?.profile?.nickname || res?.properties?.nickname || '플래너';
-                            currentNickname = savedNick || kakaoNick;
+                            
+                            // 닉네임 추출 시 null/undefined 에러 방어 구문
+                            let extractedNick = '플래너';
+                            if (res && res.properties && res.properties.nickname) {
+                                extractedNick = res.properties.nickname;
+                            } else if (res && res.kakao_account && res.kakao_account.profile && res.kakao_account.profile.nickname) {
+                                extractedNick = res.kakao_account.profile.nickname;
+                            }
+
+                            const savedNick = (res && res.id) ? localStorage.getItem(`nick_${res.id}`) : null;
+                            currentNickname = savedNick || extractedNick;
 
                             document.getElementById('auth-section').style.display = 'none';
                             document.getElementById('main-content').style.display = 'block';
@@ -98,7 +105,7 @@
 
         // 로그인된 사용자 일정 불러오기
         async function loadSchedules() {
-            if (!currentKakaoUser) return;
+            if (!currentKakaoUser || !currentKakaoUser.id) return;
             const kakaoId = String(currentKakaoUser.id);
             const q = query(collection(db, "schedules"), where("kakaoUserId", "==", kakaoId));
             const querySnapshot = await getDocs(q);
@@ -197,10 +204,10 @@
             renderSchedules();
         };
 
-        // 일정 목록 출력 (검색 + 정렬 기능)
+        // 일정 목록 출력
         function renderSchedules() {
             const list = document.getElementById('schedule-list');
-            const searchQuery = document.getElementById('search').value.toLowerCase();
+            const searchQuery = document.getElementById('search') ? document.getElementById('search').value.toLowerCase() : '';
             const sortOption = document.getElementById('sort-select') ? document.getElementById('sort-select').value : 'dday-asc';
             list.innerHTML = '';
 
@@ -212,16 +219,16 @@
                 filtered = filtered.filter(s => s.title.toLowerCase().includes(searchQuery));
             }
 
-            // 정렬 알고리즘 적용
+            // 정렬
             filtered.sort((a, b) => {
                 if (sortOption === 'dday-asc') {
-                    return new Date(a.date) - new Date(b.date); // 마감일 임박순
+                    return new Date(a.date) - new Date(b.date);
                 } else if (sortOption === 'dday-desc') {
-                    return new Date(b.date) - new Date(a.date); // 마감일 먼 순
+                    return new Date(b.date) - new Date(a.date);
                 } else if (sortOption === 'title-asc') {
-                    return a.title.localeCompare(b.title); // 이름순
+                    return a.title.localeCompare(b.title);
                 } else if (sortOption === 'category') {
-                    return a.category.localeCompare(b.category); // 유형별
+                    return a.category.localeCompare(b.category);
                 }
             });
 
@@ -441,7 +448,7 @@
             </button>
         </div>
 
-        <!-- 일정 목록 컨트롤 영역 (필터 + 정렬 + 검색) -->
+        <!-- 일정 목록 컨트롤 영역 -->
         <div class="controls-bar">
             <div class="filter-buttons">
                 <button class="btn btn-filter active" onclick="filterSchedules('전체')">전체</button>
@@ -450,14 +457,12 @@
                 <button class="btn btn-filter" onclick="filterSchedules('개인')">개인</button>
             </div>
             <div class="controls-right">
-                <!-- 정렬 선택 드롭다운 -->
                 <select id="sort-select" class="sort-select" onchange="renderSchedules()">
                     <option value="dday-asc">⏳ 마감일 임박순</option>
                     <option value="dday-desc">📅 마감일 먼 순</option>
                     <option value="title-asc">🔤 이름순</option>
                     <option value="category">🏷️ 유형별</option>
                 </select>
-                <!-- 검색창 -->
                 <div class="search-box">
                     <i class="fa-solid fa-magnifying-glass"></i>
                     <input type="text" id="search" placeholder="일정 검색..." oninput="renderSchedules()">
