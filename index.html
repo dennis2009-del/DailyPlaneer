@@ -36,16 +36,14 @@
         let schedules = [];
         let currentFilter = '전체';
 
-        // 카카오 로그인
+        // 카카오 로그인 (scope 옵션을 제거하여 0.3초 튕김 버그 수정)
         window.loginWithKakao = () => {
             Kakao.Auth.login({
-                scope: 'talk_message',
                 success: function(authObj) {
                     Kakao.API.request({
                         url: '/v2/user/me',
                         success: async function(res) {
                             currentKakaoUser = res;
-                            // 로컬스토리지에 저장된 사용자 정의 닉네임이 있으면 사용, 없으면 카카오 닉네임 사용
                             const savedNick = localStorage.getItem(`nick_${res.id}`);
                             currentNickname = savedNick || res.properties.nickname || '플래너';
 
@@ -197,7 +195,7 @@
             renderSchedules();
         };
 
-        // 일정 목록 출력 (검색 + 정렬 기능 통합)
+        // 일정 목록 출력 (검색 + 정렬 기능)
         function renderSchedules() {
             const list = document.getElementById('schedule-list');
             const searchQuery = document.getElementById('search').value.toLowerCase();
@@ -212,16 +210,16 @@
                 filtered = filtered.filter(s => s.title.toLowerCase().includes(searchQuery));
             }
 
-            // 정렬 로직 적용
+            // 정렬 알고리즘 적용
             filtered.sort((a, b) => {
                 if (sortOption === 'dday-asc') {
                     return new Date(a.date) - new Date(b.date); // 마감일 임박순
                 } else if (sortOption === 'dday-desc') {
                     return new Date(b.date) - new Date(a.date); // 마감일 먼 순
                 } else if (sortOption === 'title-asc') {
-                    return a.title.localeCompare(b.title); // 이름순 (가나다/ABC)
+                    return a.title.localeCompare(b.title); // 이름순
                 } else if (sortOption === 'category') {
-                    return a.category.localeCompare(b.category); // 카테고리순
+                    return a.category.localeCompare(b.category); // 유형별
                 }
             });
 
