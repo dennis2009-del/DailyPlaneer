@@ -36,7 +36,7 @@
         let schedules = [];
         let currentFilter = '전체';
 
-        // 카카오 로그인 (scope 옵션을 제거하여 0.3초 튕김 버그 수정)
+        // 카카오 로그인 (nickname 읽기 오류 방어 예외처리 적용)
         window.loginWithKakao = () => {
             Kakao.Auth.login({
                 success: function(authObj) {
@@ -45,7 +45,9 @@
                         success: async function(res) {
                             currentKakaoUser = res;
                             const savedNick = localStorage.getItem(`nick_${res.id}`);
-                            currentNickname = savedNick || res.properties.nickname || '플래너';
+                            // 안전하게 닉네임 가져오기 (옵셔널 체이닝)
+                            const kakaoNick = res?.kakao_account?.profile?.nickname || res?.properties?.nickname || '플래너';
+                            currentNickname = savedNick || kakaoNick;
 
                             document.getElementById('auth-section').style.display = 'none';
                             document.getElementById('main-content').style.display = 'block';
@@ -351,7 +353,7 @@
         .filter-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
         .btn-filter { background: #e9ecef; color: #495057; padding: 6px 12px; font-size: 0.85rem; border-radius: 20px; border: none; cursor: pointer; }
         .btn-filter.active { background: var(--primary-color); color: white; }
-        .controls-right { display: flex; items-center; gap: 10px; flex-wrap: wrap; flex: 1; justify-content: flex-end; }
+        .controls-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex: 1; justify-content: flex-end; }
         .sort-select { width: auto; min-width: 140px; padding: 6px 10px; font-size: 0.85rem; }
         .search-box { position: relative; min-width: 160px; }
         .search-box input { padding-left: 32px; font-size: 0.85rem; }
